@@ -1,6 +1,5 @@
 const asyncHandler = require('express-async-handler');
 const Order = require('../models/orderModel');
-const Product = require('../models/productModel');
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -10,30 +9,18 @@ const createOrder = asyncHandler(async (req, res) => {
     orderItems,
     shippingAddress,
     paymentMethod,
+    paymentResult,
     itemsPrice,
     taxPrice,
     shippingPrice,
     totalPrice,
+    isPaid,
+    paidAt
   } = req.body;
 
-  if (orderItems && orderItems.length === 0) {
+  if (!orderItems || orderItems.length === 0) {
     res.status(400);
     throw new Error('No order items');
-  }
-
-  // Verify stock and update product quantities
-  for (const item of orderItems) {
-    const product = await Product.findById(item.product);
-    if (!product) {
-      res.status(404);
-      throw new Error(`Product not found: ${item.product}`);
-    }
-    if (product.stock < item.quantity) {
-      res.status(400);
-      throw new Error(`Not enough stock for ${product.name}`);
-    }
-    product.stock -= item.quantity;
-    await product.save();
   }
 
   const order = await Order.create({
@@ -41,13 +28,27 @@ const createOrder = asyncHandler(async (req, res) => {
     orderItems,
     shippingAddress,
     paymentMethod,
+    paymentResult,
     itemsPrice,
     taxPrice,
     shippingPrice,
     totalPrice,
+    isPaid: isPaid || false,
+    paidAt: paidAt || null,
+    status: isPaid ? 'Processing' : 'Pending'
   });
 
   res.status(201).json(order);
+});
+
+// @desc    Get logged in user orders
+// @route   GET /api/orders/myorders
+// @access  Private
+const getMyOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({ user: req.user._id })
+    .sort('-createdAt')
+    .populate('user', 'name email');
+  res.json(orders);
 });
 
 // @desc    Get order by ID
@@ -59,12 +60,18 @@ const getOrderById = asyncHandler(async (req, res) => {
     'name email'
   );
 
-  if (order) {
-    res.json(order);
-  } else {
+  if (!order) {
     res.status(404);
     throw new Error('Order not found');
   }
+
+  // Make sure user is owner or admin
+  if (order.user._id.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    res.status(401);
+    throw new Error('Not authorized');
+  }
+
+  res.json(order);
 });
 
 // @desc    Update order to paid
@@ -73,22 +80,28 @@ const getOrderById = asyncHandler(async (req, res) => {
 const updateOrderToPaid = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
 
-  if (order) {
-    order.isPaid = true;
-    order.paidAt = Date.now();
-    order.paymentResult = {
-      id: req.body.id,
-      status: req.body.status,
-      update_time: req.body.update_time,
-      email_address: req.body.email_address,
-    };
-
-    const updatedOrder = await order.save();
-    res.json(updatedOrder);
-  } else {
+  if (!order) {
     res.status(404);
     throw new Error('Order not found');
   }
+
+  // Make sure user is owner or admin
+  if (order.user.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    res.status(401);
+    throw new Error('Not authorized');
+  }
+
+  order.isPaid = true;
+  order.paidAt = Date.now();
+  order.status = 'Processing';
+  order.paymentResult = {
+    id: req.body.id,
+    status: req.body.status,
+    update_time: req.body.update_time,
+  };
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
 });
 
 // @desc    Update order status
@@ -97,29 +110,18 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
 
-  if (order) {
-    order.status = req.body.status || order.status;
-    if (req.body.status === 'Delivered') {
-      order.deliveredAt = Date.now();
-    }
-    if (req.body.trackingNumber) {
-      order.trackingNumber = req.body.trackingNumber;
-    }
-
-    const updatedOrder = await order.save();
-    res.json(updatedOrder);
-  } else {
+  if (!order) {
     res.status(404);
     throw new Error('Order not found');
   }
-});
 
-// @desc    Get logged in user orders
-// @route   GET /api/orders/myorders
-// @access  Private
-const getMyOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ user: req.user._id });
-  res.json(orders);
+  order.status = req.body.status;
+  if (req.body.status === 'Delivered') {
+    order.deliveredAt = Date.now();
+  }
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
 });
 
 // @desc    Get all orders
@@ -132,9 +134,9 @@ const getOrders = asyncHandler(async (req, res) => {
   const count = await Order.countDocuments({});
   const orders = await Order.find({})
     .populate('user', 'id name')
+    .sort('-createdAt')
     .limit(pageSize)
-    .skip(pageSize * (page - 1))
-    .sort({ createdAt: -1 });
+    .skip(pageSize * (page - 1));
 
   res.json({
     orders,

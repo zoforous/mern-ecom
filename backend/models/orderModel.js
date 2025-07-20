@@ -30,13 +30,12 @@ const orderSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       required: [true, 'Please select payment method'],
-      enum: ['Credit Card', 'Debit Card', 'PayPal', 'UPI'],
+      enum: ['Credit Card', 'Debit Card', 'UPI'],
     },
     paymentResult: {
       id: { type: String },
       status: { type: String },
       update_time: { type: String },
-      email_address: { type: String },
     },
     itemsPrice: {
       type: Number,
@@ -69,17 +68,11 @@ const orderSchema = new mongoose.Schema(
     status: {
       type: String,
       required: true,
-      enum: ['Processing', 'Shipped', 'Delivered', 'Cancelled'],
-      default: 'Processing',
+      enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'],
+      default: 'Pending',
     },
     deliveredAt: {
       type: Date,
-    },
-    trackingNumber: {
-      type: String,
-    },
-    notes: {
-      type: String,
     },
   },
   {

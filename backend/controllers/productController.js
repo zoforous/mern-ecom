@@ -19,12 +19,40 @@ const getProducts = asyncHandler(async (req, res) => {
 
   const category = req.query.category ? { category: req.query.category } : {};
   const brand = req.query.brand ? { brand: req.query.brand } : {};
+
+  // Handle sorting
+  let sortQuery = {};
+  if (req.query.sort) {
+    switch (req.query.sort) {
+      case 'price':
+        sortQuery = { price: 1 }; // Low to High
+        break;
+      case '-price':
+        sortQuery = { price: -1 }; // High to Low
+        break;
+      case 'rating':
+        sortQuery = { rating: -1 }; // High to Low
+        break;
+      case '-rating':
+        sortQuery = { rating: 1 }; // Low to High
+        break;
+      case 'createdAt':
+        sortQuery = { createdAt: 1 }; // Oldest First
+        break;
+      case '-createdAt':
+      default:
+        sortQuery = { createdAt: -1 }; // Newest First
+        break;
+    }
+  } else {
+    sortQuery = { createdAt: -1 }; // Default sort: Newest First
+  }
   
   const count = await Product.countDocuments({ ...keyword, ...category, ...brand });
   const products = await Product.find({ ...keyword, ...category, ...brand })
     .limit(pageSize)
     .skip(pageSize * (page - 1))
-    .sort({ createdAt: -1 });
+    .sort(sortQuery);
 
   res.json({
     products,
@@ -68,12 +96,12 @@ const createProduct = asyncHandler(async (req, res) => {
     name,
     price,
     description,
-    images,
+    images: images || [{ url: 'https://via.placeholder.com/400', alt: name }],
     brand,
     category,
     stock,
-    sizes,
-    colors,
+    sizes: sizes || [],
+    colors: colors || [],
   });
 
   if (product) {

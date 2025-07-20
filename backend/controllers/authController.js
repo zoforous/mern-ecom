@@ -7,33 +7,42 @@ const generateToken = require('../utils/generateToken');
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body;
+  console.log('Registration attempt:', { name, email, phone }); // Debug log
 
-  const userExists = await User.findOne({ email });
+  try {
+    const userExists = await User.findOne({ email });
+    console.log('Existing user check:', userExists); // Debug log
 
-  if (userExists) {
-    res.status(400);
-    throw new Error('User already exists');
-  }
+    if (userExists) {
+      res.status(400);
+      throw new Error('User already exists');
+    }
 
-  const user = await User.create({
-    name,
-    email,
-    password,
-    phone,
-  });
-
-  if (user) {
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      phone: user.phone,
-      token: generateToken(user._id),
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone,
     });
-  } else {
+    console.log('User created:', user._id); // Debug log
+
+    if (user) {
+      res.status(201).json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        phone: user.phone,
+        token: generateToken(user._id),
+      });
+    } else {
+      res.status(400);
+      throw new Error('Invalid user data');
+    }
+  } catch (error) {
+    console.error('Registration error:', error); // Debug log
     res.status(400);
-    throw new Error('Invalid user data');
+    throw error;
   }
 });
 
