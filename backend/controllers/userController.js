@@ -157,13 +157,15 @@ const deleteAddress = asyncHandler(async (req, res) => {
     throw new Error('User not found');
   }
 
-  const address = user.addresses.id(addressId);
-  if (!address) {
+  // Check if address exists
+  const addressExists = user.addresses.id(addressId);
+  if (!addressExists) {
     res.status(404);
     throw new Error('Address not found');
   }
 
-  address.remove();
+  // Remove address using pull
+  user.addresses.pull({ _id: addressId });
   await user.save();
 
   res.json(user);

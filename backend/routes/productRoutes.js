@@ -7,9 +7,13 @@ const {
   updateProduct,
   deleteProduct,
   createProductReview,
+  searchProducts,
 } = require('../controllers/productController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
+
+// Search route should be before the ID route to avoid conflict
+router.get('/search', searchProducts);
 
 router.route('/')
   .get(getProducts)

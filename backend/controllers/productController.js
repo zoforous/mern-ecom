@@ -216,6 +216,32 @@ const createProductReview = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Search products
+// @route   GET /api/products/search
+// @access  Public
+const searchProducts = asyncHandler(async (req, res) => {
+  const { q } = req.query;
+  
+  if (!q) {
+    return res.json({ products: [] });
+  }
+
+  const searchQuery = {
+    $or: [
+      { name: { $regex: q, $options: 'i' } },
+      { description: { $regex: q, $options: 'i' } },
+      { brand: { $regex: q, $options: 'i' } },
+      { category: { $regex: q, $options: 'i' } }
+    ]
+  };
+
+  const products = await Product.find(searchQuery)
+    .select('name description price images category brand stock')
+    .limit(10);
+
+  res.json({ products });
+});
+
 module.exports = {
   getProducts,
   getProductById,
@@ -223,4 +249,5 @@ module.exports = {
   updateProduct,
   deleteProduct,
   createProductReview,
+  searchProducts, // Add this
 }; 
