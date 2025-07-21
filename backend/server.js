@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
 const connectDB = require('./config/db');
 
 // Load environment variables
@@ -15,12 +16,25 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN,
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+
+// Configure static file serving with debugging
+const staticPath = path.join(__dirname, '../frontend/public');
+console.log('Static files path:', staticPath);
+
+// Serve static files from the frontend/public directory
+app.use('/', express.static(staticPath));
+
+// Add middleware to log static file requests
+app.use((req, res, next) => {
+  console.log('Request URL:', req.url);
+  next();
+});
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -33,6 +47,7 @@ app.use('/api/admin', require('./routes/adminRoutes'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  console.error('Error:', err);
   const statusCode = err.statusCode || 500;
   res.status(statusCode).json({
     message: err.message,
@@ -42,6 +57,7 @@ app.use((err, req, res, next) => {
 
 // Handle 404 routes
 app.use('*', (req, res) => {
+  console.log('404 Not Found:', req.originalUrl);
   res.status(404).json({ message: 'Resource not found' });
 });
 
@@ -49,4 +65,5 @@ app.use('*', (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  console.log(`Static files being served from: ${staticPath}`);
 }); 

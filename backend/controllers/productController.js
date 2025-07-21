@@ -1,5 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const Product = require('../models/productModel');
+const fs = require('fs');
+const path = require('path');
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -69,6 +71,7 @@ const getProductById = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
+    console.log('Found product with images:', product.images);
     res.json(product);
   } else {
     res.status(404);
@@ -80,73 +83,66 @@ const getProductById = asyncHandler(async (req, res) => {
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
-  const {
-    name,
-    price,
-    description,
-    images,
-    brand,
-    category,
-    stock,
-    sizes,
-    colors,
-  } = req.body;
-
-  const product = await Product.create({
-    name,
-    price,
-    description,
-    images: images || [{ url: 'https://via.placeholder.com/400', alt: name }],
-    brand,
-    category,
-    stock,
-    sizes: sizes || [],
-    colors: colors || [],
-  });
-
-  if (product) {
-    res.status(201).json(product);
+  const productData = { ...req.body };
+  
+  // Handle image upload
+  if (req.file) {
+    console.log('Image file received:', req.file);
+    productData.images = [{
+      url: `/images/products/${req.file.filename}`,
+      alt: req.body.name
+    }];
+    console.log('Image data being saved:', productData.images);
   } else {
-    res.status(400);
-    throw new Error('Invalid product data');
+    console.log('No image file received');
   }
+
+  const product = await Product.create(productData);
+  console.log('Created product with images:', product.images);
+  res.status(201).json(product);
 });
 
 // @desc    Update a product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
 const updateProduct = asyncHandler(async (req, res) => {
-  const {
-    name,
-    price,
-    description,
-    images,
-    brand,
-    category,
-    stock,
-    sizes,
-    colors,
-  } = req.body;
-
   const product = await Product.findById(req.params.id);
 
-  if (product) {
-    product.name = name || product.name;
-    product.price = price || product.price;
-    product.description = description || product.description;
-    product.images = images || product.images;
-    product.brand = brand || product.brand;
-    product.category = category || product.category;
-    product.stock = stock || product.stock;
-    product.sizes = sizes || product.sizes;
-    product.colors = colors || product.colors;
-
-    const updatedProduct = await product.save();
-    res.json(updatedProduct);
-  } else {
+  if (!product) {
     res.status(404);
     throw new Error('Product not found');
   }
+
+  const updateData = { ...req.body };
+
+  // Handle image upload
+  if (req.file) {
+    // Delete old image if exists
+    if (product.images && product.images.length > 0) {
+      const oldImagePath = path.join(
+        __dirname, 
+        '../../frontend/public',
+        product.images[0].url
+      );
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+      }
+    }
+
+    // Add new image
+    updateData.images = [{
+      url: `/images/products/${req.file.filename}`,
+      alt: req.body.name || product.name
+    }];
+  }
+
+  const updatedProduct = await Product.findByIdAndUpdate(
+    req.params.id,
+    updateData,
+    { new: true }
+  );
+
+  res.json(updatedProduct);
 });
 
 // @desc    Delete a product
@@ -155,13 +151,33 @@ const updateProduct = asyncHandler(async (req, res) => {
 const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
-  if (product) {
-    await product.deleteOne();
-    res.json({ message: 'Product removed' });
-  } else {
+  if (!product) {
     res.status(404);
     throw new Error('Product not found');
   }
+
+  // Delete product image if exists
+  if (product.images && product.images.length > 0) {
+    const imagePath = path.join(
+      __dirname, 
+      '../../frontend/public',
+      product.images[0].url
+    );
+    if (fs.existsSync(imagePath)) {
+      try {
+        fs.unlinkSync(imagePath);
+        console.log('Product image deleted successfully:', imagePath);
+      } catch (error) {
+        console.error('Error deleting product image:', error);
+        // Continue with product deletion even if image deletion fails
+      }
+    }
+  }
+
+  // Use deleteOne instead of remove
+  await Product.deleteOne({ _id: req.params.id });
+  
+  res.json({ message: 'Product removed successfully' });
 });
 
 // @desc    Create new review

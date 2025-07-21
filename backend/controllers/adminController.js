@@ -51,6 +51,39 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     }
   ]);
 
+  // Get monthly sales data for the current year
+  const currentYear = new Date().getFullYear();
+  const monthlySales = await Order.aggregate([
+    {
+      $match: {
+        isPaid: true,
+        createdAt: {
+          $gte: new Date(currentYear, 0, 1),
+          $lt: new Date(currentYear + 1, 0, 1)
+        }
+      }
+    },
+    {
+      $group: {
+        _id: { $month: '$createdAt' },
+        total: { $sum: '$totalPrice' },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { '_id': 1 } }
+  ]);
+
+  // Format monthly sales data
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const salesData = Array(12).fill(0);
+  const ordersData = Array(12).fill(0);
+
+  monthlySales.forEach(({ _id, total, count }) => {
+    const monthIndex = _id - 1;
+    salesData[monthIndex] = total;
+    ordersData[monthIndex] = count;
+  });
+
   res.json({
     stats: {
       totalProducts,
@@ -59,7 +92,20 @@ const getDashboardStats = asyncHandler(async (req, res) => {
       totalRevenue
     },
     recentOrders,
-    topProducts
+    topProducts,
+    salesChart: {
+      labels: monthNames,
+      datasets: [
+        {
+          label: 'Sales (₹)',
+          data: salesData
+        },
+        {
+          label: 'Orders',
+          data: ordersData
+        }
+      ]
+    }
   });
 });
 
